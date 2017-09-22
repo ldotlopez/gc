@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 
 
+import grandcentral.utils
+
+
 import json
+
 
 import aiohttp
 
@@ -57,6 +61,20 @@ class Client:
         async with aiohttp.ClientSession() as sess:
             async with sess.request(method, url, *args, **kwargs) as resp:
                 return resp
+
+
+class SyncClient(Client):
+    @grandcentral.utils.sync_coroutine
+    async def read(self, key):
+        return (await super().read(key))
+
+    @grandcentral.utils.sync_coroutine
+    async def write(self, key, value):
+        return (await super().write(key, value))
+
+    @grandcentral.utils.sync_coroutine
+    async def query(self, key):
+        return (await super().query(key))
 
 
 def main():
