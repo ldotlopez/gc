@@ -18,7 +18,7 @@
 # USA.
 
 
-import grandcentral.utils
+from grandcentral import asyncutils
 
 
 import json
@@ -41,6 +41,21 @@ class Client:
         if resp.status == 200:
             doc = (await resp.json())
             return doc['value']
+
+        elif resp.status == 404:
+            raise KeyError(key)
+
+        else:
+            raise TypeError()
+
+    async def history(self, key):
+        resp = await self._request(
+            'GET',
+            self.MESSAGE_ENDPOINT + '/{}'.format(key))
+
+        if resp.status == 200:
+            doc = (await resp.json())
+            return doc['values']
 
         elif resp.status == 404:
             raise KeyError(key)
@@ -81,15 +96,15 @@ class Client:
 
 
 class SyncClient(Client):
-    @grandcentral.utils.sync_coroutine
+    @asyncutils.sync
     async def read(self, key):
         return (await super().read(key))
 
-    @grandcentral.utils.sync_coroutine
+    @asyncutils.sync
     async def write(self, key, value):
         return (await super().write(key, value))
 
-    @grandcentral.utils.sync_coroutine
+    @asyncutils.sync
     async def query(self, key):
         return (await super().query(key))
 

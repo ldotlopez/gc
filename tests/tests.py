@@ -23,7 +23,7 @@ import unittest.mock
 
 
 import grandcentral
-import grandcentral.utils
+from grandcentral import asyncutils
 # import grandcentral.sqlalchemystorage
 
 
@@ -41,12 +41,12 @@ class TestUtils(unittest.TestCase):
             return 'hi there'
 
         self.assertEqual(
-            grandcentral.utils.resolve(hi_there()),
+            asyncutils.wait_for(hi_there()),
             'hi there'
         )
 
     def test_sync_coroutine_decorator(self):
-        @grandcentral.utils.sync_coroutine
+        @asyncutils.sync
         async def hi_there():
             await asyncio.sleep(0.1)
             return 'hi there'
@@ -111,7 +111,7 @@ class TestClient(unittest.TestCase):
         self.client = grandcentral.Client('http://httpbin.org/')
         self.client.MESSAGE_ENDPOINT = '/anything'
 
-    @grandcentral.utils.sync_coroutine
+    @asyncutils.sync
     async def assertWrite(self, key, value):
         res = await self.client.write(key, value)
 
@@ -123,7 +123,7 @@ class TestClient(unittest.TestCase):
             json.loads(res['data']),
             expected)
 
-    @grandcentral.utils.sync_coroutine
+    @asyncutils.sync
     async def test_read_message(self):
         res = await self.client.read('foo')
         self.assertEqual(res['method'], 'GET')

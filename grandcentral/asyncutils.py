@@ -22,7 +22,7 @@ import asyncio
 import functools
 
 
-def resolve(coro, loop=None):
+def wait_for(coro, loop=None):
     if not asyncio.iscoroutine(coro):
         raise TypeError(coro)
 
@@ -30,9 +30,9 @@ def resolve(coro, loop=None):
     return loop.run_until_complete(coro)
 
 
-def sync_coroutine(fn):
+def sync(fn):
     @functools.wraps(fn)
     def _wrap(*args, **kwargs):
-        return resolve(fn(*args, **kwargs))
+        return wait_for(fn(*args, **kwargs))
 
     return _wrap
