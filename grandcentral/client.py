@@ -112,7 +112,7 @@ class SyncClient(Client):
 def main():
     import argparse
     import sys
-    from grandcentral.utils import resolve as r
+    from grandcentral.asyncutils import wait_for
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--url', default='http://localhost:8000/')
@@ -126,7 +126,7 @@ def main():
         client = Client(args.url)
 
         key, = args.args
-        value = r(client.read(key))
+        value = wait_for(client.read(key))
 
         if args.json:
             print(repr(value))
@@ -140,7 +140,7 @@ def main():
         if args.json:
             value = json.loads(value)
 
-        r(client.write(key, value))
+        wait_for(client.write(key, value))
 
     else:
         raise TypeError()
