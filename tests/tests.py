@@ -21,14 +21,19 @@
 import unittest
 import unittest.mock
 
+import asyncio
+import json
+import warnings
 
 import grandcentral
 from grandcentral import asyncutils
-# import grandcentral.sqlalchemystorage
 
-
-import asyncio
-import json
+try:
+    import grandcentral.sqlalchemystorage
+    _sqlalchemy_storage_enabled = True
+except ImportError:
+    _sqlalchemy_storage_enabled = False
+    warnings.warn('sqlalchemy storage disabled, install sqlalchemy')
 
 
 import falcon.testing
@@ -98,12 +103,13 @@ class TestMemoryStorage(StorageTestMixin, unittest.TestCase):
     STORAGE_CLASS = grandcentral.storage.MemoryStorage
 
 
-# class TestSQLAlchemyStorage(StorageTestMixin, unittest.TestCase):
-#     class SQLAlchemyMemoryStorage(grandcentral.sqlalchemystorage.SQLAlchemyStorage):
-#         def __init__(self):
-#             super().__init__(dbpath=':memory:')
+if _sqlalchemy_storage_enabled:
+    class TestSQLAlchemyStorage(StorageTestMixin, unittest.TestCase):
+        class SQLAlchemyMemoryStorage(grandcentral.sqlalchemystorage.SQLAlchemyStorage):
+            def __init__(self):
+                super().__init__(dbpath=':memory:')
 
-#     STORAGE_CLASS = SQLAlchemyMemoryStorage
+        STORAGE_CLASS = SQLAlchemyMemoryStorage
 
 
 class TestClient(unittest.TestCase):

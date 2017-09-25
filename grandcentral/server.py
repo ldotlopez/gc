@@ -18,9 +18,14 @@
 # USA.
 
 
-from grandcentral import (
-    api,
-    storage
-)
+from grandcentral import api
 
-app = api.API(storage.MemoryStorage())
+
+try:
+    import grandcentral.sqlalchemystorage
+    storage_cls = grandcentral.sqlalchemystorage.SQLAlchemyStorage
+except ImportError:
+    import grandcentral.storage
+    storage_cls = grandcentral.storage.MemoryStorage
+
+app = api.API(storage_cls())
