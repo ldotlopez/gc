@@ -99,7 +99,12 @@ class SQLAlchemyStorage(grandcentral.storage.BaseStorage):
         qs = self.sess.query(Record)
         qs = qs.filter(Record.key == key)
         qs = qs.order_by(Record.timestamp.desc())
-        if qs.count():
-            return (pickle.loads(r.value) for r in qs)
-        else:
+
+        # Control if at least one result was yelded instead of using qs.count() for efficience
+        yielded = False
+        for res in qs:
+            yield pickle.loads(res.value)
+            yielded = True
+
+        if not yielded:
             raise KeyError(key)
