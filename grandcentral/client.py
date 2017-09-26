@@ -121,37 +121,62 @@ def main():
     import argparse
     import sys
     from grandcentral.asyncutils import wait_for
+    _undef = object()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-u', '--url', default='http://localhost:8000/')
-    parser.add_argument('--json', action='store_true')
-    parser.add_argument(dest='args', nargs='+')
+    parser.add_argument(
+        '-u', '--url',
+        default='http://localhost:8000/',
+        help='Grand Central destination server'
+    )
+    parser.add_argument(
+        '--json',
+        default=False,
+        action='store_true',
+        help='Interpret supplied value as a json'
+    )
+    parser.add_argument(
+        '-a',
+        '--attachment',
+        help='Attach file to key'
+    )
+    parser.add_argument(
+        dest='key',
+        help='Destination key'
+        )
+    parser.add_argument(
+        dest='value',
+        nargs='?',
+        default=_undef,
+        help='Value to store'
+    )
 
     args = parser.parse_args(sys.argv[1:])
-    n_args = len(args.args)
 
-    if n_args == 1:
+    if args.value is _undef:
         client = Client(args.url)
 
-        key, = args.args
-        value = wait_for(client.read(key))
+        value = wait_for(client.read(args.key))
 
         if args.json:
             print(repr(value))
         else:
             print(value)
 
-    elif n_args == 2:
+    else:
         client = Client(args.url)
 
-        key, value = args.args
+        value = args.value
         if args.json:
             value = json.loads(value)
 
-        wait_for(client.write(key, value))
+        if args.attachment:
+            with open(args.attachment, 'rb') as fh:
+                attachment = fh.read()
+        else:
+            attachment = None
 
-    else:
-        raise TypeError()
+        wait_for(client.write(args.key, value, attachment))
 
 
 if __name__ == '__main__':
