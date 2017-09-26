@@ -21,16 +21,21 @@
 import grandcentral.storage
 
 
-import binascii
 import json
 
 
 import falcon
+import falcon_multipart.middleware
+import mimeparse
 
 
 class API(falcon.API):
     def __init__(self, storage, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            *args,
+            middleware=[falcon_multipart.middleware.MultipartMiddleware()],
+            **kwargs)
+
         if not isinstance(storage, grandcentral.storage.BaseStorage):
             raise TypeError(storage)
 
@@ -48,16 +53,44 @@ class MessagesCollectionResource:
         self.storage = storage
 
     def on_post(self, req, resp):
-        has_attachment = req.params.get('attachment') in ['1', 'y', 'yes', 'true']
-        doc = json.load(req.bounded_stream)
+        typ, subtyp, props = mimeparse.parse_mime_type(req.content_type)
 
-        key = doc['key']
-        value = doc['value']
-        if has_attachment:
-            attachment = doc['attachment']
-            attachment = bytes(binascii.a2b_hex(attachment))
-        else:
+        if typ == 'multipart' and subtyp in ['form-data', 'mixed']:
+            # Handle multipart uploads
+
+            message = req.get_param('message')
+
+            # Message not found in request
+            if not message:
+                raise ValueError('Missing message')
+
+            # Invalid json for message
+            try:
+                message = json.loads(message)
+            except json.decoder.JSONDecodeError as e:
+                raise ValueError('Malformed message') from e
+
+            attachment = req.get_param('attachment')
+
+        elif typ == 'application' and subtyp == 'json':
+            # Handle simple requests
+
+            # Invalid json for message
+            try:
+                message = json.load(req.stream)
+            except json.decoder.JSONDecodeError as e:
+                raise ValueError('Malformed message') from e
+
             attachment = None
+
+        else:
+            raise ValueError('Unknow request')
+
+        try:
+            key = message['key']
+            value = message['value']
+        except KeyError as e:
+            raise ValueError('Malformed message') from e
 
         self.storage.write(key, value, attachment)
 

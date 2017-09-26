@@ -21,7 +21,6 @@
 from grandcentral import asyncutils
 
 
-import binascii
 import json
 
 
@@ -74,17 +73,23 @@ class Client:
 
     async def write(self, key, value, attachment=None):
         json_data = {'key': key, 'value': value}
-        query_params = {}
-        if attachment:
-            json_data['attachment'] = binascii.b2a_hex(attachment).decode('ascii')
-            query_params['attachment'] = '1'
 
-        payload = json.dumps(json_data)
-        resp = await self._request(
-            'POST',
-            self.MESSAGE_ENDPOINT,
-            params=query_params,
-            data=payload)
+        if attachment is not None:
+            with aiohttp.MultipartWriter('form-data') as payload:
+                payload.append(json.dumps(json_data), {
+                    'CONTENT-TYPE': 'application/json',
+                    'Content-Disposition': 'form-data; name="message"'
+                })
+                payload.append(attachment, {
+                    'CONTENT-TYPE': 'application/octet-stream',
+                    'Content-Disposition': 'form-data; name="attachment"'
+                })
+
+            req_params = {'data': payload}
+        else:
+            req_params = {'json': json_data}
+
+        resp = await self._request('POST', self.MESSAGE_ENDPOINT, **req_params)
 
         if resp.status == 204:
             resp.close()
