@@ -90,7 +90,10 @@ class SQLAlchemyStorage(grandcentral.storage.BaseStorage):
 
         return value
 
-    def write(self, key, value):
+    def write(self, key, value, attachment=None):
+        if attachment is not None:
+            raise NotImplementedError()
+
         value = pickle.dumps(value)
         self.sess.add(Record(key=key, value=value))
         self.sess.commit()

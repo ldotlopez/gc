@@ -21,6 +21,7 @@
 from grandcentral import asyncutils
 
 
+import binascii
 import json
 
 
@@ -67,15 +68,22 @@ class Client:
         resp = await self._request(
             'GET',
             self.MESSAGE_ENDPOINT,
-            query_string='key={}'.format(key))
+            params='key={}'.format(key))
 
         return (await resp.json())
 
-    async def write(self, key, value):
-        payload = json.dumps({'key': key, 'value': value})
+    async def write(self, key, value, attachment=None):
+        json_data = {'key': key, 'value': value}
+        query_params = {}
+        if attachment:
+            json_data['attachment'] = binascii.b2a_hex(attachment).decode('ascii')
+            query_params['attachment'] = '1'
+
+        payload = json.dumps(json_data)
         resp = await self._request(
             'POST',
             self.MESSAGE_ENDPOINT,
+            params=query_params,
             data=payload)
 
         if resp.status == 204:
@@ -101,8 +109,8 @@ class SyncClient(Client):
         return (await super().read(key))
 
     @asyncutils.sync
-    async def write(self, key, value):
-        return (await super().write(key, value))
+    async def write(self, key, value, attachment=None):
+        return (await super().write(key, value, attachment))
 
     @asyncutils.sync
     async def query(self, key):

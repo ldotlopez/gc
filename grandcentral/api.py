@@ -21,6 +21,7 @@
 import grandcentral.storage
 
 
+import binascii
 import json
 
 
@@ -47,11 +48,18 @@ class MessagesCollectionResource:
         self.storage = storage
 
     def on_post(self, req, resp):
+        has_attachment = req.params.get('attachment') in ['1', 'y', 'yes', 'true']
         doc = json.load(req.bounded_stream)
 
         key = doc['key']
         value = doc['value']
-        self.storage.write(key, value)
+        if has_attachment:
+            attachment = doc['attachment']
+            attachment = bytes(binascii.a2b_hex(attachment))
+        else:
+            attachment = None
+
+        self.storage.write(key, value, attachment)
 
         resp.status = falcon.HTTP_204
 

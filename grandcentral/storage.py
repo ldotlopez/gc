@@ -27,7 +27,7 @@ class BaseStorage:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def write(self, key, value):
+    def write(self, key, value, attachment=None):
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -42,7 +42,10 @@ class MemoryStorage(BaseStorage):
     def read(self, key):
         return self._mem[key][-1]
 
-    def write(self, key, value):
+    def write(self, key, value, attachment=None):
+        if attachment is not None:
+            raise NotImplementedError()
+
         if key not in self._mem:
             self._mem[key] = []
 
