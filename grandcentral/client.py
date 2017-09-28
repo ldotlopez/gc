@@ -63,33 +63,9 @@ class Client:
         else:
             raise TypeError()
 
-    async def query(self, key, min=None, max=None):
-        resp = await self._request(
-            'GET',
-            self.MESSAGE_ENDPOINT,
-            params='key={}'.format(key))
-
-        return (await resp.json())
-
     async def write(self, key, value, attachment=None):
-        json_data = {'key': key, 'value': value}
-
-        if attachment is not None:
-            with aiohttp.MultipartWriter('form-data') as payload:
-                payload.append(json.dumps(json_data), {
-                    'CONTENT-TYPE': 'application/json',
-                    'Content-Disposition': 'form-data; name="message"'
-                })
-                payload.append(attachment, {
-                    'CONTENT-TYPE': 'application/octet-stream',
-                    'Content-Disposition': 'form-data; name="attachment"'
-                })
-
-            req_params = {'data': payload}
-        else:
-            req_params = {'json': json_data}
-
-        resp = await self._request('POST', self.MESSAGE_ENDPOINT, **req_params)
+        req_kwargs = self._build_request_arguments(key, value, attachment)
+        resp = await self._request('POST', self.MESSAGE_ENDPOINT, **req_kwargs)
 
         if resp.status == 204:
             resp.close()
@@ -101,11 +77,41 @@ class Client:
         else:
             raise TypeError()
 
+    async def query(self, key, min=None, max=None):
+        resp = await self._request(
+            'GET',
+            self.MESSAGE_ENDPOINT,
+            params='key={}'.format(key))
+
+        return (await resp.json())
+
     async def _request(self, method, path, *args, **kwargs):
         url = self.api + path
         async with aiohttp.ClientSession() as sess:
             async with sess.request(method, url, *args, **kwargs) as resp:
                 return resp
+
+    def _build_request_arguments(self, key, value, attachment=None):
+        json_data = {
+            'key': key,
+            'value': value
+        }
+
+        if attachment is not None:
+            with aiohttp.MultipartWriter('form-data') as payload:
+                payload.append(json.dumps(json_data), {
+                    'Content-Type': 'application/json',
+                    'Content-Disposition': 'form-data; name="message"'
+                })
+                payload.append(attachment, {
+                    'Content-Type': 'application/octet-stream',
+                    'Content-Disposition': 'form-data; name="attachment"; filename="uploaded-file"'
+                })
+
+            return dict(data=payload)
+
+        else:
+            return dict(json=json_data)
 
 
 class SyncClient(Client):

@@ -22,12 +22,15 @@ import grandcentral
 
 
 import datetime
+import hashlib
+import os
 import pickle
 import time
 from os import path
 
 
 import sqlalchemy as sa
+from sqlalchemy import event
 from sqlalchemy.ext import declarative
 
 
@@ -52,9 +55,11 @@ class Record(Base):
         sa.PrimaryKeyConstraint('key', 'timestamp'),
     )
 
-    key = sa.Column(sa.String)
-    value = sa.Column(sa.String)
+    key = sa.Column(sa.String, nullable=False)
     timestamp = sa.Column(sa.Float, default=time.time)
+
+    value = sa.Column(sa.BLOB, nullable=False)
+    attachment = sa.Column(sa.String, nullable=True, unique=False)
 
     def __repr__(self):
         fmt = r"<Record(key='{key}')>"
@@ -62,21 +67,41 @@ class Record(Base):
 
 
 class SQLAlchemyStorage(grandcentral.storage.BaseStorage):
-    def __init__(self, dbpath=None):
-        if dbpath is None:
-            dbpath = path.realpath(__file__)
-            dbpath = path.dirname(dbpath)
-            dbpath = path.dirname(dbpath)
-            dbpath = dbpath + '/' + 'gc.sqlite'
+    def __init__(self, storage_path=None):
+        if storage_path is None:
+            storage_path = path.realpath(__file__)
+            storage_path = path.dirname(storage_path)
+            storage_path = path.dirname(storage_path)
+            storage_path = storage_path + '/data/'
 
-        dburi = 'sqlite:///' + dbpath
+        os.makedirs(storage_path, exist_ok=True)
 
-        engine = sa.create_engine(dburi)
+        self._db_uri = 'sqlite:///' + storage_path + 'gc.sqlite'
+        engine = sa.create_engine(self._db_uri)
         Base.metadata.create_all(bind=engine)
 
         session_factory = sa.orm.sessionmaker(bind=engine)
         Session = sa.orm.scoped_session(session_factory)
         self.sess = Session()
+
+        self._files_path = storage_path + 'files/'
+        os.makedirs(self._files_path, exist_ok=True)
+
+    def _storage_filepath_for_attachment(self, digest):
+        return '{base_path}/{digest[0]}/{digest[0]}{digest[1]}/{digest}'.format(
+            base_path=self._files_path,
+            digest=digest
+        )
+
+        # event.listen(Record, 'before_insert', self._on_before_insert)
+
+    # def _on_before_insert(self, mapper, connection, target):
+    #     try:
+    #         prev = self.read(target.key)
+    #     except KeyError:
+    #         return
+
+    #     print('{} -> {}'.format(repr(prev), repr(target.value)))
 
     def read(self, key):
         qs = self.sess.query(Record)
@@ -91,11 +116,21 @@ class SQLAlchemyStorage(grandcentral.storage.BaseStorage):
         return value
 
     def write(self, key, value, attachment=None):
-        if attachment is not None:
-            raise NotImplementedError()
+        record = Record(key=key, value=pickle.dumps(value))
 
-        value = pickle.dumps(value)
-        self.sess.add(Record(key=key, value=value))
+        if attachment is not None:
+            sha1 = hashlib.sha1()
+            sha1.update(attachment)
+            digest = sha1.hexdigest()
+
+            record.attachment = digest
+            storage_filepath = self._storage_filepath_for_attachment(digest)
+
+            os.makedirs(path.dirname(storage_filepath), exist_ok=True)
+            with open(storage_filepath, 'wb') as fh:
+                fh.write(attachment)
+
+        self.sess.add(record)
         self.sess.commit()
 
     def backlog(self, key):

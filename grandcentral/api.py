@@ -70,7 +70,8 @@ class MessagesCollectionResource:
             except json.decoder.JSONDecodeError as e:
                 raise ValueError('Malformed message') from e
 
-            attachment = req.get_param('attachment')
+            form_field = req.get_param('attachment')
+            attachment = form_field.file.read()
 
         elif typ == 'application' and subtyp == 'json':
             # Handle simple requests
