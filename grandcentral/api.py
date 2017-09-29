@@ -44,8 +44,10 @@ class API(falcon.API):
 
         msg_col_rsrc = MessagesCollectionResource(storage=self.storage)
         msg_item_rsrc = MessagesItemResource(storage=self.storage)
+        msg_blacklog_rsrc = MessageBacklogCollection(storage=self.storage)
         self.add_route('/message', msg_col_rsrc)
         self.add_route('/message/{key}', msg_item_rsrc)
+        self.add_route('/message/{key}/backlog', msg_blacklog_rsrc)
 
 
 class MessagesCollectionResource:
@@ -119,3 +121,34 @@ class MessagesItemResource:
             'key': key,
             'value': value
         })
+
+
+class MessageBacklogCollection:
+    def __init__(self, storage, max_messages=100):
+        self.storage = storage
+        self.limit = max_messages
+
+    def on_get(self, req, resp, key):
+        def _backlog():
+            g = self.storage.backlog(key)
+            for dummy in range(self.limit):
+                try:
+                    ts, value = next(g)
+                    yield (ts, value)
+                except StopIteration:
+                    return
+
+        ret = [
+            {
+                'timestamp': x[0],
+                'message': {
+                    'key': key,
+                    'value': x[1]
+                }
+            }
+            for x in _backlog()
+        ]
+
+        resp.status = falcon.HTTP_200
+        resp.content_type = falcon.MEDIA_JSON
+        resp.body = json.dumps(ret)

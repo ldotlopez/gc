@@ -24,7 +24,7 @@ import grandcentral
 import datetime
 import hashlib
 import os
-import pickle
+import json
 import time
 from os import path
 
@@ -58,7 +58,7 @@ class Record(Base):
     key = sa.Column(sa.String, nullable=False)
     timestamp = sa.Column(sa.Float, default=time.time)
 
-    value = sa.Column(sa.BLOB, nullable=False)
+    value = sa.Column(sa.String, nullable=False)
     attachment = sa.Column(sa.String, nullable=True, unique=False)
 
     def __repr__(self):
@@ -111,12 +111,12 @@ class SQLAlchemyStorage(grandcentral.storage.BaseStorage):
         if record is None:
             raise KeyError(key)
 
-        value = pickle.loads(record.value)
+        value = json.loads(record.value)
 
         return value
 
     def write(self, key, value, attachment=None):
-        record = Record(key=key, value=pickle.dumps(value))
+        record = Record(key=key, value=json.dumps(value))
 
         if attachment is not None:
             sha1 = hashlib.sha1()
@@ -141,7 +141,7 @@ class SQLAlchemyStorage(grandcentral.storage.BaseStorage):
         # Control if at least one result was yelded instead of using qs.count() for efficience
         yielded = False
         for res in qs:
-            yield pickle.loads(res.value)
+            yield (res.timestamp, json.loads(res.value))
             yielded = True
 
         if not yielded:

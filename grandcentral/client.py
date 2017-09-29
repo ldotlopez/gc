@@ -21,7 +21,9 @@
 from grandcentral import asyncutils
 
 
+import io
 import json
+import pathlib
 
 
 import aiohttp
@@ -48,14 +50,13 @@ class Client:
         else:
             raise TypeError()
 
-    async def history(self, key):
+    async def backlog(self, key):
         resp = await self._request(
             'GET',
-            self.MESSAGE_ENDPOINT + '/{}'.format(key))
+            self.MESSAGE_ENDPOINT + '/{}/backlog'.format(key))
 
         if resp.status == 200:
-            doc = (await resp.json())
-            return doc['values']
+            return await resp.json()
 
         elif resp.status == 404:
             raise KeyError(key)
@@ -97,27 +98,37 @@ class Client:
             'value': value
         }
 
-        if attachment is not None:
-            with aiohttp.MultipartWriter('form-data') as payload:
-                payload.append(json.dumps(json_data), {
-                    'Content-Type': 'application/json',
-                    'Content-Disposition': 'form-data; name="message"'
-                })
-                payload.append(attachment, {
-                    'Content-Type': 'application/octet-stream',
-                    'Content-Disposition': 'form-data; name="attachment"; filename="uploaded-file"'
-                })
-
-            return dict(data=payload)
-
-        else:
+        if attachment is None:
             return dict(json=json_data)
+
+        elif isinstance(attachment, pathlib.Path):
+            with attachment.open('rb') as fh:
+                attachment = fh.read()
+
+        elif isinstance(attachment, (io.BufferedIOBase, io.TextIOBase)):
+            attachment = attachment.read()
+
+        with aiohttp.MultipartWriter('form-data') as payload:
+            payload.append(json.dumps(json_data), {
+                'Content-Type': 'application/json',
+                'Content-Disposition': 'form-data; name="message"'
+            })
+            payload.append(attachment, {
+                'Content-Type': 'application/octet-stream',
+                'Content-Disposition': 'form-data; name="attachment"; filename="uploaded-file"'
+            })
+
+        return dict(data=payload)
 
 
 class SyncClient(Client):
     @asyncutils.sync
     async def read(self, key):
         return (await super().read(key))
+
+    @asyncutils.sync
+    async def backlog(self, key):
+        return (await super().backlog(key))
 
     @asyncutils.sync
     async def write(self, key, value, attachment=None):
@@ -131,63 +142,73 @@ class SyncClient(Client):
 def main():
     import argparse
     import sys
-    from grandcentral.asyncutils import wait_for
-    _undef = object()
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-u', '--url',
         default='http://localhost:8000/',
-        help='Grand Central destination server'
-    )
+        help='Grand Central destination server')
     parser.add_argument(
         '--json',
         default=False,
         action='store_true',
-        help='Interpret supplied value as a json'
-    )
+        help='Interpret supplied value as a json')
     parser.add_argument(
-        '-a',
         '--attachment',
-        help='Attach file to key'
-    )
+        help='Attach file to key')
+    parser.add_argument(
+        '--backlog',
+        action='store_true',
+        help='Show backlog for a key')
     parser.add_argument(
         dest='key',
-        help='Destination key'
-        )
+        help='Destination key')
     parser.add_argument(
         dest='value',
         nargs='?',
-        default=_undef,
-        help='Value to store'
-    )
+        help='Value to store')
 
     args = parser.parse_args(sys.argv[1:])
 
-    if args.value is _undef:
-        client = Client(args.url)
+    if args.backlog and (args.value or args.attachment):
+        msg = "backlog and value or attachments is not a valid operation"
+        raise ValueError(msg)
 
-        value = wait_for(client.read(args.key))
+    if args.attachment and not args.value:
+        msg = "attachment needs a value"
+        raise ValueError(msg)
 
-        if args.json:
-            print(repr(value))
-        else:
-            print(value)
+    client = SyncClient(args.url)
 
+    # Mode: backlog
+    if args.backlog:
+        for x in client.backlog(args.key):
+            value = x['message']['value']
+            if args.json:
+                value = json.loads(value)
+
+            print('{timestamp}: {value}'.format(
+                timestamp=x['timestamp'],
+                value=value
+                ))
+
+    # Mode: read
+    elif not args.value:
+        value = client.read(args.key)
+        print(repr(value) if args.json else value)
+
+    # Mode: write
     else:
-        client = Client(args.url)
-
-        value = args.value
         if args.json:
-            value = json.loads(value)
+            args.value = json.loads(args.value)
 
         if args.attachment:
-            with open(args.attachment, 'rb') as fh:
-                attachment = fh.read()
-        else:
-            attachment = None
+            args.attachment = pathlib.Path(args.attachment)
 
-        wait_for(client.write(args.key, value, attachment))
+        client.write(
+            args.key,
+            args.value,
+            args.attachment)
 
 
 if __name__ == '__main__':
